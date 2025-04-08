@@ -1,146 +1,19 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <poll.h>
-#include <time.h>
+#include <stdbool.h>
 
-#define PORT "3000"
 
-int StartServer()
+#include "HelperFunctions.c"
+#include "SeverFunctions.c"
+
+struct DATA
 {
+    char name[100];
+    char value[100];
+};
 
-    // establishing address
-    struct addrinfo hints, *res;
-
-    // error code for getaddrinfo
-    int rv;
-
-    // Socket number
-    int sockfd;
-
-    // Getting the socket ready with info
-    memset(&hints, 0, sizeof(hints));
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
-
-    rv = getaddrinfo(NULL, PORT, &hints, &res);
-
-    if (rv != 0)
-    {
-        fprintf(stderr, "pollserver: %s\n", gai_strerror(rv));
-        exit(1);
-    }
-
-    sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-
-    if (sockfd < 0)
-    {
-        perror("Couldnt create a socket \n");
-        exit(2);
-    }
-
-    if (bind(sockfd, res->ai_addr, res->ai_addrlen) < 0)
-    {
-        close(sockfd);
-        perror("Couldnt create a bind \n");
-        exit(3);
-    }
-
-    freeaddrinfo(res);
-
-    if (listen(sockfd, 10) == -1)
-    {
-        perror("listen");
-        exit(4);
-    };
-
-    return sockfd;
-}
-
-int getTimeString(char *timeBuf)
-{
-    time_t rawtime;
-    struct tm *timeinfo;
-
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    *timeBuf = asctime(timeinfo);
-}
-
-void GetFilePath(char route[], char *fileURL)
-{
-
-    if (!strcmp(route, "/"))
-    {
-        strcpy(fileURL, "index.html");
-    }
-    else
-    {
-        // ignore the / at the start
-        strncpy(fileURL, route + 1, strlen(route));
-        FILE *file = fopen(fileURL, "r");
-        if (!file)
-        {
-            strcpy(fileURL, "404.html");
-        }
-    }
-}
-
-void add_to_pfds(struct pollfd *pfds[], int newfd, int *fd_count, int *fd_size)
-{
-    // If we don't have room, add more space in the pfds array
-    if (*fd_count == *fd_size)
-    {
-        *fd_size *= 2; // Double it
-
-        *pfds = realloc(*pfds, sizeof(**pfds) * (*fd_size));
-    }
-
-    (*pfds)[*fd_count].fd = newfd;
-    (*pfds)[*fd_count].events = POLLIN; // Check ready-to-read
-
-    (*fd_count)++;
-
-    printf("new sock yay ! %d \n", newfd);
-}
-
-void HandleNewConnection(int sockfd, struct pollfd *pfds[], int *fd_count, int *fd_size)
-{
-
-    struct sockaddr_storage remoteaddr;
-    socklen_t addrlen = sizeof(remoteaddr);
-    int newfd;
-
-    newfd = accept(sockfd, (struct sockaddr *)&remoteaddr, &addrlen);
-
-    if (newfd == -1)
-    {
-        perror("accept");
-    }
-    else
-    {
-        add_to_pfds(pfds, newfd, fd_count, fd_size);
-    }
-}
-
-void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
-{
-    // Copy the one from the end over this one
-    pfds[i] = pfds[*fd_count - 1];
-
-    (*fd_count)--;
-}
-
-void GET_ROUTE(int acceptedfd, char route[], char fileURL[])
+void GET_ROUTE(int acceptedfd, char route[])
 {
     char bufftosend[5000];
+    char fileURL[100];
     GetFilePath(route, fileURL);
     FILE *file = fopen(fileURL, "r");
     if (!file)
@@ -175,6 +48,85 @@ void GET_ROUTE(int acceptedfd, char route[], char fileURL[])
     fclose(file);
 }
 
+void POST_ROUTE(int acceptedfd, char buff[])
+{
+    int contextlength = extract_content_length(buff);
+    char *header200 = "HTTP/1.0 200 OK\nServer: CS241Serv v0.1\nContent-Type: text/html\n\n";
+
+    char reversedbuff[strlen(buff)];
+    memset(reversedbuff, 0, sizeof(reversedbuff));
+
+    char data[contextlength +1];
+    memset(data,0,sizeof(data));
+
+    strcpy(reversedbuff, buff);
+
+    strrev(reversedbuff);
+    strncpy(data, reversedbuff, contextlength);
+
+    strrev(data);
+
+    int i, nfields = 1;
+
+    for (i = 0; i < contextlength; i++)
+    {
+        if (data[i] == '&')
+            nfields++;
+    }
+
+    struct DATA fields[nfields];
+    char field[100], value[100];
+    memset(field,0,sizeof(field));
+    memset(value,0,sizeof(value));
+    int nfildsfilled = 0,counter = 0;
+    bool inFiled = true;
+    
+
+    for (i = 0; i < contextlength+1; i++)
+    {
+        // verify if we are in the same field name 
+        if (data[i] == '&'){
+            strcpy(fields[nfildsfilled].name,field);
+            strcpy(fields[nfildsfilled].value,value);
+            nfildsfilled++;
+            memset(field,0,sizeof(field));
+            memset(value,0,sizeof(value));
+            counter =0;
+            inFiled = true;
+            
+        }
+        
+        else if ((nfildsfilled == nfields-1 ) && (i == contextlength)){
+            strcpy(fields[nfildsfilled].name,field);
+            strcpy(fields[nfildsfilled].value,value);
+        }
+             
+        // verify if we are in the field name 
+        else if (data[i] == '='){
+            inFiled = false;
+            counter = 0;
+        }
+        
+        else if (inFiled){
+            field[counter] = data[i];
+            counter++;
+        }
+        else if (!inFiled){
+            value[counter] = data[i];
+            counter++;
+        }
+        
+            
+
+    }
+
+    printf("field 1 name : %s  value : %s \n",fields[0].name, fields[0].value);
+    printf("field 2 name : %s  value : %s \n",fields[1].name, fields[1].value);
+
+    
+    send(acceptedfd, header200, strlen(header200), 0);
+}
+
 int main()
 {
 
@@ -182,7 +134,6 @@ int main()
     char buff[1024];
     char method[10];
     char route[100];
-    char fileURL[100];
 
     // number of connction
     int fd_count = 0;
@@ -191,7 +142,13 @@ int main()
 
     sockfd = StartServer();
     int option = 1;
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option));
+
+    // remove "Address already in use" error message
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &option, sizeof(option)) == -1)
+    {
+        perror("setsockopt");
+        exit(1);
+    }
 
     // Add the listener to set
     pfds[0].fd = sockfd;
@@ -245,11 +202,18 @@ int main()
                     else
                     {
 
-                        printf("sending to %d", pfds[i].fd);
-                        sscanf(buff, "%s %s", method, route);
+                        sscanf(buff, "%s ", method);
 
                         if (!strcmp(method, "GET"))
-                            GET_ROUTE(pfds[i].fd, route, fileURL);
+                        {
+                            sscanf(buff, "GET %s HTTP/1.1", route);
+                            GET_ROUTE(pfds[i].fd, route);
+                        }
+
+                        if (!strcmp(method, "POST"))
+                        {
+                            POST_ROUTE(pfds[i].fd, buff);
+                        }
                     }
                 }
             }
