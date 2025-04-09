@@ -7,7 +7,10 @@
 </head>
 <body>
     <h1>Add a New Blog</h1>
-    <form method="POST">
+    <form method="POST" action="/blog/confirmation.html" >
+        <label for="title">Subject:</label><br>
+        <input type="text" id="subject" name="subject" required><br><br>
+
         <label for="title">Title:</label><br>
         <input type="text" id="title" name="title" required><br><br>
 

@@ -1,6 +1,5 @@
 #include <stdbool.h>
 
-
 #include "HelperFunctions.c"
 #include "SeverFunctions.c"
 
@@ -48,16 +47,41 @@ void GET_ROUTE(int acceptedfd, char route[])
     fclose(file);
 }
 
+void Add_Blog(struct DATA fields[])
+{
+
+    FILE *file = fopen("blog/blogs.json", "r+");
+    if (!file)
+    {
+        perror("file not found");
+        return;
+    }
+
+    // Set cursor before end
+
+    fseek(file, 0, SEEK_END);
+    fseek(file, -2, SEEK_CUR);
+
+    const char *log_entry = ",\n{\"title\": \"Top 10 JavaScript Tips\",\"subject\": \"Web Development\",\"content\": \"Here are the top 10 JavaScript tips to improve your coding skills and productivity.\"}\n]";
+    fprintf(file, "%s\n", log_entry);
+    fclose(file);
+}
+
 void POST_ROUTE(int acceptedfd, char buff[])
 {
-    int contextlength = extract_content_length(buff);
     char *header200 = "HTTP/1.0 200 OK\nServer: CS241Serv v0.1\nContent-Type: text/html\n\n";
+    char *header404 = "HTTP/1.0 404 Not Found\nServer: CS241Serv v0.1\nContent-Type: text/html\n\n";
+
+    if (strlen(buff) > 1024)
+        send(acceptedfd, header404, strlen(header200), 0);
+
+    int contextlength = extract_content_length(buff);
 
     char reversedbuff[strlen(buff)];
     memset(reversedbuff, 0, sizeof(reversedbuff));
 
-    char data[contextlength +1];
-    memset(data,0,sizeof(data));
+    char data[contextlength + 1];
+    memset(data, 0, sizeof(data));
 
     strcpy(reversedbuff, buff);
 
@@ -76,62 +100,100 @@ void POST_ROUTE(int acceptedfd, char buff[])
 
     struct DATA fields[nfields];
     char field[100], value[100];
-    memset(field,0,sizeof(field));
-    memset(value,0,sizeof(value));
-    int nfildsfilled = 0,counter = 0;
+    memset(field, 0, sizeof(field));
+    memset(value, 0, sizeof(value));
+    int nfildsfilled = 0, counter = 0;
     bool inFiled = true;
-    
 
-    for (i = 0; i < contextlength+1; i++)
+    for (i = 0; i < contextlength + 1; i++)
     {
-        // verify if we are in the same field name 
-        if (data[i] == '&'){
-            strcpy(fields[nfildsfilled].name,field);
-            strcpy(fields[nfildsfilled].value,value);
+        // verify if we are in the same field name
+        if (data[i] == '&')
+        {
+            strcpy(fields[nfildsfilled].name, field);
+            strcpy(fields[nfildsfilled].value, value);
             nfildsfilled++;
-            memset(field,0,sizeof(field));
-            memset(value,0,sizeof(value));
-            counter =0;
+            memset(field, 0, sizeof(field));
+            memset(value, 0, sizeof(value));
+            counter = 0;
             inFiled = true;
-            
         }
-        
-        else if ((nfildsfilled == nfields-1 ) && (i == contextlength)){
-            strcpy(fields[nfildsfilled].name,field);
-            strcpy(fields[nfildsfilled].value,value);
+
+        else if ((nfildsfilled == nfields - 1) && (i == contextlength))
+        {
+            strcpy(fields[nfildsfilled].name, field);
+            strcpy(fields[nfildsfilled].value, value);
         }
-             
-        // verify if we are in the field name 
-        else if (data[i] == '='){
+
+        // verify if we are in the field name
+        else if (data[i] == '=')
+        {
             inFiled = false;
             counter = 0;
         }
-        
-        else if (inFiled){
+
+        else if (inFiled)
+        {
             field[counter] = data[i];
             counter++;
         }
-        else if (!inFiled){
+        else if (!inFiled)
+        {
             value[counter] = data[i];
             counter++;
         }
-        
-            
-
     }
 
-    printf("field 1 name : %s  value : %s \n",fields[0].name, fields[0].value);
-    printf("field 2 name : %s  value : %s \n",fields[1].name, fields[1].value);
+    for (i = 0; i < nfildsfilled + 1; i++)
+    {
+        printf("field %d name : %s  value : %s \n", i, fields[i].name, fields[i].value);
+    }
 
-    
-    send(acceptedfd, header200, strlen(header200), 0);
+    Add_Blog(fields);
+
+    // // Construct a response body with the received data
+    // char responseBody[5000];
+    // memset(responseBody, 0, sizeof(responseBody));
+    // strcat(responseBody, "<html><body><h1>Received Data</h1><ul>");
+
+    // for (i = 0; i < nfildsfilled + 1; i++)
+    // {
+    //     strcat(responseBody, "<li>");
+    //     strcat(responseBody, fields[i].name);
+    //     strcat(responseBody, ": ");
+    //     strcat(responseBody, fields[i].value);
+    //     strcat(responseBody, "</li>");
+    // }
+
+    // strcat(responseBody, "</ul></body></html>");
+
+    // // Prepare the response header with Content-Length
+    // char responseHeader[1024];
+    // snprintf(responseHeader, sizeof(responseHeader),
+    //          "HTTP/1.1 200 OK\r\n"
+    //          "Content-Length: %ld\r\n"
+    //          "Content-Type: text/html\r\n"
+    //          "\r\n",
+    //          strlen(responseBody));
+
+    // // Send the response header
+    // send(acceptedfd, responseHeader, strlen(responseHeader), 0);
+
+    // // Send the response body
+    // send(acceptedfd, responseBody, strlen(responseBody), 0);
 }
 
 int main()
 {
+    // buffer for reading data
+    char *buff = malloc(INITIAL_BUFFER_SIZE);
+    if (!buff)
+    {
+        perror("malloc");
+        exit(0);
+    }
 
     int sockfd, rbytes;
-    char buff[1024];
     char method[10];
     char route[100];
 
@@ -180,8 +242,9 @@ int main()
                 }
                 else
                 {
-
-                    rbytes = recv(pfds[i].fd, buff, sizeof(buff), 0);
+                    // make sure that the buff is empty
+                    memset(buff, 0, strlen(buff));
+                    rbytes = handle_client_data(pfds[i].fd, buff);
 
                     if (rbytes <= 0)
                     {

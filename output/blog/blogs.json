@@ -1,0 +1,18 @@
+[
+    {
+        "title": "Welcome to My Blog",
+        "subject": "Introduction",
+        "content": "This is the first post on my blog. Stay tuned for more updates!"
+    },
+    {
+        "title": "How to Build an HTTP Server",
+        "subject": "Programming",
+        "content": "In this post, we will explore how to build a simple HTTP server using C and JavaScript."
+    },
+    {
+        "title": "Top 10 JavaScript Tips",
+        "subject": "Web Development",
+        "content": "Here are the top 10 JavaScript tips to improve your coding skills and productivity."
+    },
+{"title": "Top 10 JavaScript Tips","subject": "Web Development","content": "Here are the top 10 JavaScript tips to improve your coding skills and productivity."}
+]

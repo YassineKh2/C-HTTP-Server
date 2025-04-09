@@ -110,3 +110,55 @@ void del_from_pfds(struct pollfd pfds[], int i, int *fd_count)
 
     (*fd_count)--;
 }
+
+int handle_client_data(int fd, char *buff)
+{
+
+    size_t total_bytes_read = 0;
+    ssize_t rbytes;
+    size_t buffer_size = INITIAL_BUFFER_SIZE;
+
+    while (total_bytes_read < MAX_DATA_SIZE)
+    {
+        if (total_bytes_read + 1 >= buffer_size)
+        {
+            buffer_size *= 2;
+            char *new_buff = realloc(buff, buffer_size);
+            if (!new_buff)
+            {
+                perror("realloc");
+                free(buff);
+                return -2;
+            }
+            buff = new_buff;
+        }
+
+        rbytes = recv(fd, buff + total_bytes_read, buffer_size - total_bytes_read - 1, 0);
+        if (rbytes <= 0)
+        {
+            if (rbytes == 0)
+            {
+                printf("Socket %d disconnected\n", fd);
+                return 0;
+            }
+            else
+            {
+                perror("recv");
+                return -1;
+            }
+            break;
+        }
+
+        total_bytes_read += rbytes;
+        buff[total_bytes_read] = '\0';
+        return 1;
+    }
+
+    if (total_bytes_read >= MAX_DATA_SIZE)
+    {
+        printf("Maximum data size exceeded, closing connection.\n");
+        return -1;
+    }
+
+    free(buff);
+}
