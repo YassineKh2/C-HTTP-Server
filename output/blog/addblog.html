@@ -1,23 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Add Blog</title>
-</head>
-<body>
+  </head>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f4f4f9;
+      color: #333;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      margin-top: 50px;
+    }
+    p {
+      font-size: 18px;
+    }
+    a {
+      color: #007bff;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+  <body>
     <h1>Add a New Blog</h1>
-    <form method="POST" action="/blog/confirmation.html" >
-        <label for="title">Subject:</label><br>
-        <input type="text" id="subject" name="subject" required><br><br>
+    <form method="POST" action="/blog/confirmation.html">
+      <label for="title">Title:</label><br />
+      <input type="text" id="title" name="title" required /><br /><br />
+      
+      <label for="title">Subject:</label><br />
+      <input type="text" id="subject" name="subject" required /><br /><br />
 
-        <label for="title">Title:</label><br>
-        <input type="text" id="title" name="title" required><br><br>
+      <label for="content">Content:</label><br />
+      <textarea
+        id="content"
+        name="content"
+        rows="10"
+        cols="50"
+        required
+      ></textarea
+      ><br /><br />
 
-        <label for="content">Content:</label><br>
-        <textarea id="content" name="content" rows="10" cols="50" required></textarea><br><br>
-
-        <button type="submit">Submit</button>
+      <button type="submit">Submit</button>
     </form>
-</body>
+  </body>
 </html>

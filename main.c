@@ -3,18 +3,14 @@
 #include "HelperFunctions.c"
 #include "SeverFunctions.c"
 
-struct DATA
-{
-    char name[100];
-    char value[100];
-};
-
 void GET_ROUTE(int acceptedfd, char route[])
 {
     char bufftosend[5000];
     char fileURL[100];
     GetFilePath(route, fileURL);
-    FILE *file = fopen(fileURL, "r");
+
+    // Open the file in binary mode so that it can support both text and images
+    FILE *file = fopen(fileURL, "rb");
     if (!file)
     {
         perror("wrong path");
@@ -28,52 +24,39 @@ void GET_ROUTE(int acceptedfd, char route[])
 
     // Prepare the response header with Content-Length
     char resHeader[1024];
+    const char *contentType;
+    if (strstr(fileURL, ".css"))
+        contentType = "text/css";
+    else if (strstr(fileURL, ".png"))
+        contentType = "image/png";
+    else
+        contentType = "text/html";
     snprintf(resHeader, sizeof(resHeader),
              "HTTP/1.1 200 OK\r\n"
              "Content-Length: %ld\r\n"
-             "Content-Type: text/html\r\n"
+             "Content-Type: %s\r\n"
              "\r\n",
-             file_size);
+             file_size, contentType);
 
     // Send the response header
     send(acceptedfd, resHeader, strlen(resHeader), 0);
 
     // Send the file content
-    // TO FIX : make sure it takes the correct length of the file its sending
-    while (fgets(bufftosend, sizeof(bufftosend), file))
+    size_t bytesRead;
+    while ((bytesRead = fread(bufftosend, 1, sizeof(bufftosend), file)) > 0)
     {
-        send(acceptedfd, bufftosend, strlen(bufftosend), 0);
-    }
-    fclose(file);
-}
-
-void Add_Blog(struct DATA fields[])
-{
-
-    FILE *file = fopen("blog/blogs.json", "r+");
-    if (!file)
-    {
-        perror("file not found");
-        return;
+        send(acceptedfd, bufftosend, bytesRead, 0);
     }
 
-    // Set cursor before end
-
-    fseek(file, 0, SEEK_END);
-    fseek(file, -2, SEEK_CUR);
-
-    const char *log_entry = ",\n{\"title\": \"Top 10 JavaScript Tips\",\"subject\": \"Web Development\",\"content\": \"Here are the top 10 JavaScript tips to improve your coding skills and productivity.\"}\n]";
-    fprintf(file, "%s\n", log_entry);
     fclose(file);
 }
 
 void POST_ROUTE(int acceptedfd, char buff[])
 {
-    char *header200 = "HTTP/1.0 200 OK\nServer: CS241Serv v0.1\nContent-Type: text/html\n\n";
     char *header404 = "HTTP/1.0 404 Not Found\nServer: CS241Serv v0.1\nContent-Type: text/html\n\n";
 
     if (strlen(buff) > 1024)
-        send(acceptedfd, header404, strlen(header200), 0);
+        send(acceptedfd, header404, strlen(header404), 0);
 
     int contextlength = extract_content_length(buff);
 
@@ -110,6 +93,9 @@ void POST_ROUTE(int acceptedfd, char buff[])
         // verify if we are in the same field name
         if (data[i] == '&')
         {
+            replace_plus_with_space(field);
+            replace_plus_with_space(value);
+
             strcpy(fields[nfildsfilled].name, field);
             strcpy(fields[nfildsfilled].value, value);
             nfildsfilled++;
@@ -121,6 +107,9 @@ void POST_ROUTE(int acceptedfd, char buff[])
 
         else if ((nfildsfilled == nfields - 1) && (i == contextlength))
         {
+            replace_plus_with_space(field);
+            replace_plus_with_space(value);
+            
             strcpy(fields[nfildsfilled].name, field);
             strcpy(fields[nfildsfilled].value, value);
         }
@@ -149,39 +138,57 @@ void POST_ROUTE(int acceptedfd, char buff[])
         printf("field %d name : %s  value : %s \n", i, fields[i].name, fields[i].value);
     }
 
-    Add_Blog(fields);
+    int response;
+    response = Add_Blog(fields, contextlength, nfildsfilled);
 
-    // // Construct a response body with the received data
-    // char responseBody[5000];
-    // memset(responseBody, 0, sizeof(responseBody));
-    // strcat(responseBody, "<html><body><h1>Received Data</h1><ul>");
-
-    // for (i = 0; i < nfildsfilled + 1; i++)
-    // {
-    //     strcat(responseBody, "<li>");
-    //     strcat(responseBody, fields[i].name);
-    //     strcat(responseBody, ": ");
-    //     strcat(responseBody, fields[i].value);
-    //     strcat(responseBody, "</li>");
-    // }
-
-    // strcat(responseBody, "</ul></body></html>");
-
-    // // Prepare the response header with Content-Length
-    // char responseHeader[1024];
-    // snprintf(responseHeader, sizeof(responseHeader),
-    //          "HTTP/1.1 200 OK\r\n"
-    //          "Content-Length: %ld\r\n"
-    //          "Content-Type: text/html\r\n"
-    //          "\r\n",
-    //          strlen(responseBody));
-
-    // // Send the response header
-    // send(acceptedfd, responseHeader, strlen(responseHeader), 0);
-
-    // // Send the response body
-    // send(acceptedfd, responseBody, strlen(responseBody), 0);
+    if (response)
+        GET_ROUTE(acceptedfd, "/blog/confirmation.html");
 }
+
+void DELETE_ROUTE(int acceptedfd, char buff[])
+{
+    // Extract the blog ID from the DELETE request
+    char idParam[20];
+    int blogID = -1;
+
+    if (sscanf(buff, "DELETE /deleteblog?id=%s HTTP/1.1", idParam) == 1)
+    {
+        blogID = atoi(idParam); 
+    }
+
+    if (blogID == -1)
+    {
+        const char *response = "HTTP/1.1 400 Bad Request\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 23\r\n"
+                               "\r\n"
+                               "Invalid or missing ID.\n";
+        send(acceptedfd, response, strlen(response), 0);
+        return;
+    }
+
+    int result = Remove_Blog(blogID);
+
+    if (result)
+    {
+        const char *response = "HTTP/1.1 200 OK\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 20\r\n"
+                               "\r\n"
+                               "Blog deleted successfully.\n";
+        send(acceptedfd, response, strlen(response), 0);
+    }
+    else
+    {
+        const char *response = "HTTP/1.1 404 Not Found\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 16\r\n"
+                               "\r\n"
+                               "Blog not found.\n";
+        send(acceptedfd, response, strlen(response), 0);
+    }
+}
+
 
 int main()
 {
@@ -276,6 +283,11 @@ int main()
                         if (!strcmp(method, "POST"))
                         {
                             POST_ROUTE(pfds[i].fd, buff);
+                        }
+
+                        if (!strcmp(method, "DELETE"))
+                        {
+                            DELETE_ROUTE(pfds[i].fd, buff);
                         }
                     }
                 }

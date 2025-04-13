@@ -8,8 +8,32 @@
   </head>
   <body>
     <div id="blog-container"></div>
+    <a href="../index.html">Home</a>
     <a href="addblog.html">Add blog</a>
 
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #f4f4f9;
+        color: #333;
+        margin: 0;
+        padding: 0;
+      }
+      h1 {
+        margin-top: 50px;
+      }
+      p {
+        font-size: 18px;
+      }
+      a {
+        color: #007BFF;
+        text-decoration: none;
+      }
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
     <script>
       async function loadBlogs() {
         try {
@@ -20,16 +44,50 @@
           const blogs = await response.json();
           const blogContainer = document.getElementById("blog-container");
 
-          blogs.forEach(({ title, subject, content }) => {
-            blogContainer.innerHTML += `
-                <div style="border: 1px solid #bdc3c7; padding: 15px; border-radius: 5px; background-color: #ecf0f1; margin-bottom: 20px;">
-                    <h2 style="color: #2c3e50; font-family: Arial, sans-serif; margin-bottom: 10px;">${title}</h2>
-                    <h4 style="color: #34495e; font-family: Arial, sans-serif; margin-bottom: 8px;">${subject}</h4>
-                    <p style="color: #7f8c8d; font-family: Georgia, serif; line-height: 1.6;">${content}</p>
-                </div>`;
+          blogs.forEach(({ id, title, subject, content }) => {
+            const blogDiv = document.createElement("div");
+            blogDiv.style.cssText =
+              "border: 1px solid #bdc3c7; padding: 15px; border-radius: 5px; background-color: #ecf0f1; margin-bottom: 20px;";
+
+            blogDiv.innerHTML = `
+              <h2 style="color: #2c3e50; font-family: Arial, sans-serif; margin-bottom: 10px;">${title}</h2>
+              <h4 style="color: #34495e; font-family: Arial, sans-serif; margin-bottom: 8px;">${subject}</h4>
+              <p style="color: #7f8c8d; font-family: Georgia, serif; line-height: 1.6;">${content}</p>
+              <a href="#" style="background-color: #f39c12; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer;">Modify</a>
+              <a href="#" class="delete-btn" data-id="${id}" style="background-color: #e74c3c; color: white; border: none; padding: 10px 15px; border-radius: 5px; cursor: pointer; margin-right: 10px;">Delete</a>
+            `;
+
+            blogContainer.appendChild(blogDiv);
+          });
+
+          // Add event listeners to all delete buttons
+          document.querySelectorAll(".delete-btn").forEach((btn) => {
+            btn.addEventListener("click", async (e) => {
+              e.preventDefault();
+              const blogId = btn.getAttribute("data-id");
+              await deleteBlog(blogId);
+            });
           });
         } catch (error) {
           console.error("Error loading blogs:", error);
+        }
+      }
+
+      async function deleteBlog(blogId) {
+        try {
+          const response = await fetch(`/deleteblog?id=${blogId}`, {
+            method: "DELETE",
+          });
+
+          if (!response.ok) {
+            throw new Error(`Failed to delete blog with ID ${blogId}`);
+          }
+
+          console.log(`Blog with ID ${blogId} deleted successfully.`);
+          document.getElementById("blog-container").innerHTML = "";
+          loadBlogs();
+        } catch (error) {
+          console.error("Error deleting blog:", error);
         }
       }
 

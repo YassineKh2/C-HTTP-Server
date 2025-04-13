@@ -6,6 +6,12 @@
 #define MAX_DATA_SIZE 8192
 #define INITIAL_BUFFER_SIZE 1024
 
+struct DATA
+{
+    char name[100];
+    char value[100];
+};
+
 int extract_content_length(const char *request)
 {
     const char *content_length_header = "Content-Length: ";
@@ -41,6 +47,7 @@ int getTimeString(char *timeBuf)
 void GetFilePath(char route[], char *fileURL)
 {
 
+    printf("file routes : %s \n", route);
     if (!strcmp(route, "/"))
     {
         strcpy(fileURL, "index.html");
@@ -83,3 +90,212 @@ char *strrev(char *str)
     return str;
 }
 
+int Add_Blog(struct DATA fields[], int contextlength, int nfildsfilled)
+{
+
+    FILE *file = fopen("blog/blogs.json", "r+");
+    if (!file)
+    {
+        perror("file not found");
+        return 0;
+    }
+
+    // Set cursor before end
+    fseek(file, 0, SEEK_END);
+    fseek(file, -2, SEEK_CUR);
+
+    // We add 100 characters for the additional data like {} [] ,, and ""
+    char data[contextlength + 100];
+    memset(data, 0, sizeof(data));
+    strcat(data, ",{");
+
+    // Generate a random 4-digit ID
+    srand(time(NULL));
+    int randomID = rand() % 9000 + 1000;
+    char idBuffer[12];
+    snprintf(idBuffer, sizeof(idBuffer), "\"id\":%d,", randomID);
+    strcat(data, idBuffer);
+
+    int i;
+    for (i = 0; i < nfildsfilled + 1; i++)
+    {
+        strcat(data, "\"");
+        strcat(data, fields[i].name);
+        strcat(data, "\":\"");
+        strcat(data, fields[i].value);
+        strcat(data, "\"");
+
+        if (i != nfildsfilled)
+        {
+            strcat(data, ",");
+        }
+    }
+
+    strcat(data, "}]");
+
+    fprintf(file, "%s\n", data);
+    fclose(file);
+
+    return 1;
+}
+
+int Remove_Blog(int blogID)
+{
+    FILE *file = fopen("blog/blogs.json", "r");
+    if (!file)
+    {
+        perror("file not found");
+        return 0;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+
+    char *buffer = malloc(fileSize + 1);
+    if (!buffer)
+    {
+        perror("Memory allocation failed");
+        fclose(file);
+        return 0;
+    }
+
+    fread(buffer, 1, fileSize, file);
+    buffer[fileSize] = '\0';
+    fclose(file);
+
+    char idSearch[20];
+    snprintf(idSearch, sizeof(idSearch), "{\"id\":%d", blogID);
+    char *start = strstr(buffer, idSearch);
+    if (!start)
+    {
+        printf("Blog not found.\n");
+        free(buffer);
+        return 0;
+    }
+
+    char *end = strstr(start, "},");
+    // If it didnt find },
+    if (!end)
+    {
+        end = strstr(start, "}]");
+    }
+    if (end)
+    {
+        if (end[1] == ']')
+            start--;
+
+        end += (end[1] == ']') ? 1 : 2; 
+    }
+
+    memmove(start, end, strlen(end) + 1);
+    file = fopen("blog/blogs.json", "w");
+    if (!file)
+    {
+        perror("file not found");
+        free(buffer);
+        return 0;
+    }
+
+    fprintf(file, "%s", buffer);
+    fclose(file);
+    free(buffer);
+
+    return 1;
+}
+
+int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
+{
+    FILE *file = fopen("blog/blogs.json", "r");
+    if (!file)
+    {
+        perror("file not found");
+        return 0;
+    }
+
+    fseek(file, 0, SEEK_END);
+    long fileSize = ftell(file);
+    rewind(file);
+
+    char *buffer = malloc(fileSize + 1);
+    if (!buffer)
+    {
+        perror("Memory allocation failed");
+        fclose(file);
+        return 0;
+    }
+
+    fread(buffer, 1, fileSize, file);
+    buffer[fileSize] = '\0';
+    fclose(file);
+
+    char idSearch[20];
+    snprintf(idSearch, sizeof(idSearch), "\"id\"\"%d\"", blogID);
+    char *start = strstr(buffer, idSearch);
+    if (!start)
+    {
+        printf("Blog not found.\n");
+        free(buffer);
+        return 0;
+    }
+
+    char *end = strstr(start, "},");
+    if (!end)
+    {
+        end = strstr(start, "}]");
+    }
+    if (end)
+    {
+        if (end[1] == ']')
+            start--;
+
+        end += (end[1] == ']') ? 1 : 2;
+    }
+    char newBlog[1024] = "{";
+    strcat(newBlog, idSearch);
+    strcat(newBlog, ",");
+    for (int i = 0; i < nfildsfilled; i++)
+    {
+        strcat(newBlog, "\"");
+        strcat(newBlog, fields[i].name);
+        strcat(newBlog, "\":\"");
+        strcat(newBlog, fields[i].value);
+        strcat(newBlog, "\"");
+
+        if (i != nfildsfilled - 1)
+        {
+            strcat(newBlog, ",");
+        }
+    }
+    strcat(newBlog, "}");
+
+    size_t newBlogLen = strlen(newBlog);
+    memmove(start + newBlogLen, end, strlen(end) + 1);
+    memcpy(start, newBlog, newBlogLen);
+
+    file = fopen("blog/blogs.json", "w");
+    if (!file)
+    {
+        perror("file not found");
+        free(buffer);
+        return 0;
+    }
+
+    fprintf(file, "%s", buffer);
+    fclose(file);
+    free(buffer);
+
+    return 1;
+}
+
+void replace_plus_with_space(char *str)
+{
+    while (*str)
+    {
+        if (*str == '+')
+        {
+            *str = ' ';
+        }
+        str++;
+    }
+}
