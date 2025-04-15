@@ -38,7 +38,7 @@ A simple HTTP Server built using C. This project demonstrates a basic web server
     ````
 3. In your browser, navigate to [http://localhost:3000](http://localhost:3000) to access your server.
 
-### NOTE : Make sure you keep the same json structure !
+NOTE : Make sure you keep the same json structure !
 
 ## License
 
