@@ -1,4 +1,3 @@
-#include <stdbool.h>
 
 #include "HelperFunctions.c"
 #include "SeverFunctions.c"
@@ -190,6 +189,68 @@ void DELETE_ROUTE(int acceptedfd, char buff[])
 }
 
 
+void PUT_ROUTE(int acceptedfd, char buff[])
+{
+    // Extract the blog ID from the query string
+    char idParam[20];
+    int blogID = -1;
+    if (sscanf(buff, "PUT /modifyblog?id=%s HTTP/1.1", idParam) == 1)
+    {
+        blogID = atoi(idParam); 
+    }
+    if (blogID == -1)
+    {
+        const char *response = "HTTP/1.1 400 Bad Request\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 23\r\n"
+                               "\r\n"
+                               "Invalid or missing ID.\n";
+        send(acceptedfd, response, strlen(response), 0);
+        return;
+    }
+
+    char *body = strstr(buff, "\r\n\r\n");
+    if (!body)
+    {
+        const char *response = "HTTP/1.1 400 Bad Request\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 20\r\n"
+                               "\r\n"
+                               "Missing request body.\n";
+        send(acceptedfd, response, strlen(response), 0);
+        return;
+    }
+    body += 4; 
+
+    //ignore the  id with %*[^"]
+    struct DATA fields[3];
+    memset(fields, 0, sizeof(fields));
+    sscanf(body,
+           "{\"id\":\"%*[^\"]\",\"title\":\"%[^\"]\",\"subject\":\"%[^\"]\",\"content\":\"%[^\"]\"}",
+           fields[0].value, fields[1].value, fields[2].value);
+
+    strcpy(fields[0].name, "title");
+    strcpy(fields[1].name, "subject");
+    strcpy(fields[2].name, "content");
+
+
+    int result = Modify_Blog(blogID, fields, 3);
+
+    if (result)
+    {
+        GET_ROUTE(acceptedfd, "/blog/confirmationedit.html");
+    }
+    else
+    {
+        const char *response = "HTTP/1.1 404 Not Found\r\n"
+                               "Content-Type: text/plain\r\n"
+                               "Content-Length: 16\r\n"
+                               "\r\n"
+                               "Blog not found.\n";
+        send(acceptedfd, response, strlen(response), 0);
+    }
+}
+
 int main()
 {
     // buffer for reading data
@@ -288,6 +349,11 @@ int main()
                         if (!strcmp(method, "DELETE"))
                         {
                             DELETE_ROUTE(pfds[i].fd, buff);
+                        }
+
+                        if (!strcmp(method, "PUT"))
+                        {
+                            PUT_ROUTE(pfds[i].fd, buff);
                         }
                     }
                 }

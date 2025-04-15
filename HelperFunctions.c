@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdbool.h>
+
 
 #define MAX_DATA_SIZE 8192
 #define INITIAL_BUFFER_SIZE 1024
@@ -47,15 +49,22 @@ int getTimeString(char *timeBuf)
 void GetFilePath(char route[], char *fileURL)
 {
 
-    printf("file routes : %s \n", route);
-    if (!strcmp(route, "/"))
+    // Find if there is a parameter ? for put requests 
+    char *queryStart = strchr(route, '?');
+
+    // If '?' is found remove it 
+    if (queryStart)
+    {
+        *queryStart = '\0';
+    }
+
+    if (strcmp(route, "/") == 0)
     {
         strcpy(fileURL, "index.html");
     }
     else
     {
-        // ignore the / at the start
-        strncpy(fileURL, route + 1, strlen(route));
+        strcpy(fileURL, route + 1);
         FILE *file = fopen(fileURL, "r");
         if (!file)
         {
@@ -213,6 +222,7 @@ int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
         return 0;
     }
 
+  
     fseek(file, 0, SEEK_END);
     long fileSize = ftell(file);
     rewind(file);
@@ -230,7 +240,7 @@ int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
     fclose(file);
 
     char idSearch[20];
-    snprintf(idSearch, sizeof(idSearch), "\"id\"\"%d\"", blogID);
+    snprintf(idSearch, sizeof(idSearch), "\"id\":%d", blogID);
     char *start = strstr(buffer, idSearch);
     if (!start)
     {
@@ -239,6 +249,7 @@ int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
         return 0;
     }
 
+    bool addcoma = false;
     char *end = strstr(start, "},");
     if (!end)
     {
@@ -246,11 +257,13 @@ int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
     }
     if (end)
     {
-        if (end[1] == ']')
-            start--;
+        if (end[1] == ',')
+            addcoma = true;
 
         end += (end[1] == ']') ? 1 : 2;
     }
+    
+    start--;
     char newBlog[1024] = "{";
     strcat(newBlog, idSearch);
     strcat(newBlog, ",");
@@ -268,7 +281,8 @@ int Modify_Blog(int blogID, struct DATA fields[], int nfildsfilled)
         }
     }
     strcat(newBlog, "}");
-
+    if(addcoma)
+    strcat(newBlog, ",");
     size_t newBlogLen = strlen(newBlog);
     memmove(start + newBlogLen, end, strlen(end) + 1);
     memcpy(start, newBlog, newBlogLen);
